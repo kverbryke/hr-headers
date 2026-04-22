@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { 
+    font-family: 'Segoe UI', sans-serif; 
+    background: transparent; 
+    padding: 4px 0 8px 0;
+  }
+  #header {
+    display: flex;
+    align-items: stretch;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 52px;
+  }
+  #accent-bar {
+    width: 5px;
+    flex-shrink: 0;
+  }
+  #body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+  #section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .divider {
+    width: 1px;
+    height: 28px;
+    background: #e0e0e0;
+    flex-shrink: 0;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 52px;
+  }
+  .stat-num {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    color: #888;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  .spacer { flex: 1; }
+  #list-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: 'Segoe UI', sans-serif;
+    color: #444;
+    background: transparent;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #list-btn:hover { background: #f5f5f5; }
+  #loading {
+    padding: 14px 16px;
+    font-size: 12px;
+    color: #999;
+  }
+  #error {
+    padding: 14px 16px;
+    font-size: 12px;
+    color: #c0392b;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="header" style="display:none;">
+  <div id="accent-bar"></div>
+  <div id="body">
+    <span id="section-title"></span>
+    <div class="divider"></div>
+    <div class="stat">
+      <span id="num-action" class="stat-num">—</span>
+      <span class="stat-label">Action needed</span>
+    </div>
+    <div class="stat">
+      <span id="num-duesoon" class="stat-num">—</span>
+      <span class="stat-label">Due soon</span>
+    </div>
+    <div class="stat">
+      <span id="num-inprogress" class="stat-num">—</span>
+      <span class="stat-label">In progress</span>
+    </div>
+    <div class="spacer"></div>
+    <a id="list-btn" href="#" target="_blank" rel="noopener">
+      Open full list ↗
+    </a>
+  </div>
+</div>
+<div id="loading">Loading...</div>
+<div id="error">Could not load section data.</div>
+
+<script>
+  const SITE_URL = 'https://fedsync808.sharepoint.com/sites/HumanResources1';
+  const LIST_NAME = 'DashboardStats';
+
+  const colorMap = {
+    red:   { bar: '#A32D2D', action: '#A32D2D', duesoon: '#854F0B' },
+    amber: { bar: '#854F0B', action: '#854F0B', duesoon: '#854F0B' },
+    teal:  { bar: '#0F6E56', action: '#0F6E56', duesoon: '#854F0B' },
+    blue:  { bar: '#185FA5', action: '#185FA5', duesoon: '#854F0B' }
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const sectionKey = params.get('section') || '';
+
+  const endpoint = `${SITE_URL}/_api/web/lists/getbytitle('${LIST_NAME}')/items` +
+    `?$filter=SectionKey eq '${sectionKey}'` +
+    `&$select=Title,ActionNeeded,DueSoon,InProgress,AccentColor,ListURL` +
+    `&$top=1`;
+
+  fetch(endpoint, {
+    headers: { 'Accept': 'application/json;odata=verbose' },
+    credentials: 'include'
+  })
+  .then(r => {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  })
+  .then(data => {
+    const items = data.d && data.d.results;
+    if (!items || items.length === 0) throw new Error('No row found for section: ' + sectionKey);
+    
+    const item = items[0];
+    const colors = colorMap[item.AccentColor] || colorMap.blue;
+    const actionCount = item.ActionNeeded || 0;
+    const dueSoonCount = item.DueSoon || 0;
+    const inProgressCount = item.InProgress || 0;
+
+    document.getElementById('accent-bar').style.background = colors.bar;
+    document.getElementById('section-title').textContent = item.Title;
+
+    const numAction = document.getElementById('num-action');
+    numAction.textContent = actionCount;
+    numAction.style.color = actionCount > 0 ? colors.action : '#888';
+
+    const numDueSoon = document.getElementById('num-duesoon');
+    numDueSoon.textContent = dueSoonCount;
+    numDueSoon.style.color = dueSoonCount > 0 ? colors.duesoon : '#888';
+
+    document.getElementById('num-inprogress').textContent = inProgressCount;
+
+    const btn = document.getElementById('list-btn');
+    if (item.ListURL) btn.href = item.ListURL;
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('header').style.display = 'flex';
+  })
+  .catch(err => {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    console.error('Section header error:', err);
+  });
+</script>
+</body>
+</html>
